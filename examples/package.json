@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "rpc-magic-proxy": "file:.."
+  }
+}

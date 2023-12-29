@@ -1,0 +1,9 @@
+{
+    "extends": "./tsconfig.json",
+    "compilerOptions": {
+        "module": "commonjs",
+        "target": "ES2016",
+        "declaration": false,
+        "emitDeclarationOnly": false,
+    }
+}

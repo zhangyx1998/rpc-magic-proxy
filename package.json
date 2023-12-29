@@ -1,0 +1,41 @@
+{
+  "name": "rpc-magic-proxy",
+  "version": "0.0.0-beta.0",
+  "description": "Magical RPC proxy",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.cjs",
+      "import": "./dist/index.mjs",
+      "default": "./dist/index.mjs"
+    }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:esm": "tsc -b tsconfig.esm.json && mv dist/index.js dist/index.mjs",
+    "build:cjs": "tsc -b tsconfig.cjs.json && mv dist/index.js dist/index.cjs",
+    "build": "tsc; npm run build:esm; npm run build:cjs;"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zhangyx1998/rpc-magic-proxy.git"
+  },
+  "keywords": [
+    "worker",
+    "worker_threads",
+    "RPC",
+    "proxy"
+  ],
+  "author": "Yuxuan Zhang",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/zhangyx1998/rpc-magic-proxy/issues"
+  },
+  "homepage": "https://github.com/zhangyx1998/rpc-magic-proxy#readme",
+  "devDependencies": {
+    "@types/node": "^20.10.5",
+    "typescript": "^5.3.3"
+  }
+}
