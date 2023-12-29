@@ -1,8 +1,7 @@
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
 import RpcContext from "rpc-magic-proxy";
 
-if (isMainThread) {
-  /*=============================  Main thread  =============================*/
+async function main() {
   const ctx = new RpcContext();
   const data = {
     ping() {
@@ -17,8 +16,9 @@ if (isMainThread) {
   // This will serialize data and send it to worker
   const workerData = await ctx.serialize(data)
   ctx.bind(new Worker(new URL(import.meta.url), { workerData }));
-} else {
-  /*============================= Worker thread =============================*/
+}
+
+async function worker() {
   const ctx = new RpcContext(parentPort);
   const data = ctx.deserialize(workerData);
   // Proxy a function call
@@ -28,3 +28,5 @@ if (isMainThread) {
   // This will unbind listeners and allow worker to exit
   ctx.reset();
 }
+
+isMainThread ? main() : worker()

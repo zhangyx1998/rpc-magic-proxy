@@ -13,8 +13,13 @@ function isRpcPrimitive(value: any) {
   );
 }
 
-function deferPromise() {
-  let resolve!: (value?: any) => void, reject!: (error?: any) => void;
+interface DeferredPromise {
+  resolve: (value?: any) => void;
+  reject: (error?: any) => void;
+}
+
+function deferPromise(): DeferredPromise & { promise: Promise<any> } {
+  let resolve!: DeferredPromise["resolve"], reject!: DeferredPromise["reject"];
   const promise = new Promise((res, rej) => {
     resolve = res;
     reject = rej;
@@ -26,67 +31,121 @@ function deferPromise() {
   };
 }
 
+function escape(str: string) {
+  return str.replace(/^\#*rpc\:\/\//, (match) => "#" + match);
+}
+
+function unescape(str: string) {
+  return str.replace(/^\#+rpc\:\/\//, (match) => match.slice(1));
+}
+
+function getRpcId(str: string) {
+  if (str.startsWith("rpc://~")) {
+    return {
+      local: str.slice(7),
+    };
+  } else if (str.startsWith("rpc://")) {
+    return {
+      remote: str.slice(6),
+    };
+  } else {
+    return {};
+  }
+}
+
+type Counterpart = Worker | MessagePort;
+
+// This key is used to identify and classify a rpc message
+const RPC_TYPE_KEY = "RPC::TYPE";
+// This symbol is used to identify if a function is an RPC proxy
+const rpcLabel = Symbol("RPC Proxied Function");
+
+type RpcProxy = Function & { [rpcLabel]: { origin: Counterpart; id: string } };
+
 export default class RpcContext {
-  constructor(private counterPart?: Worker | MessagePort) {
-    if (counterPart) this.bind(counterPart);
+  private counterparts: Counterpart[] = [];
+  constructor(counterpart?: Counterpart) {
+    if (counterpart) this.bind(counterpart);
   }
   // ====================== Context Management ======================
   private listeners: Function[] = [];
 
-  bind(counterPart: Worker | MessagePort) {
-    this.counterPart = counterPart;
+  bind(counterpart: Counterpart) {
+    this.counterparts.push(counterpart);
     const self = this;
     const messageHandler = (payload: any) => {
-      if (payload?.type === "rpc:request") {
-        self.handleRequest(payload);
-      } else if (payload?.type === "rpc:response") {
+      const type = payload?.[RPC_TYPE_KEY];
+      if (type === "request") {
+        self.handleRequest(payload, counterpart);
+      } else if (type === "response") {
         self.handleResponse(payload);
       }
     };
     const closeHandler = () => self.reset();
-    counterPart.on("message", messageHandler);
-    counterPart.on("close", closeHandler);
+    counterpart.on("message", messageHandler);
+    counterpart.on("close", closeHandler);
     this.listeners.push(() => {
-      counterPart.off("message", messageHandler);
-      counterPart.off("close", closeHandler);
+      counterpart.off("message", messageHandler);
+      counterpart.off("close", closeHandler);
     });
+    return this;
   }
 
   reset() {
-    this.services = {};
-    this.pendingReq = {};
-    while (this.listeners.length) this.listeners.shift()!();
-    delete this.counterPart;
+    this.services.clear();
+    this.pendingReq.clear();
+    this.counterparts.length = 0;
+    while (this.listeners.length) this.listeners.shift()?.();
   }
 
-  private send(value: any, transferList?: any[]) {
-    if (!this.counterPart)
-      throw new Error("Bind to a worker or parentPort first.");
-    else this.counterPart.postMessage(value, transferList);
+  private getCounterpart(cp?: Counterpart) {
+    if (cp) return cp;
+    if (this.counterparts.length !== 1)
+      throw new Error(
+        [
+          "Counterpart can only be omitted for a dedicated context",
+          `currently got ${this.counterparts.length} counterparts`,
+        ].join(", ")
+      );
+    return this.counterparts[0]!;
   }
+
   // ========================== RPC Server ==========================
-  private services: { [key: string]: Function } = {};
+  private services: Map<string, Function> = new Map();
   private serviceCounter = 0;
   async serialize<T>(
-    _data: Function | T | PromiseLike<T>
+    _data: Function | T | PromiseLike<T>,
+    counterpart?: Counterpart
   ): Promise<string | T> {
     const data = await _data;
-    if (isRpcPrimitive(data)) {
+    if (typeof data === "string") {
+      return escape(data);
+    } else if (isRpcPrimitive(data)) {
       return data as T;
     } else if (typeof data === "function") {
+      // Check for remote reflection
+      if (counterpart && rpcLabel in data) {
+        const { origin, id } = (data as any)[rpcLabel]!;
+        if (counterpart === origin) {
+          // Use reflect
+          return "rpc://@" + id;
+        }
+      }
       // Register RPC handler
-      const rpcId = `rpc://` + (this.serviceCounter++).toString(16);
-      this.services[rpcId] = data;
-      return rpcId;
+      const rpcId = (this.serviceCounter++).toString(16);
+      this.services.set(rpcId, data);
+      return "rpc://" + rpcId;
     } else if (Array.isArray(data)) {
-      return (await Promise.all(data.map((el) => this.serialize(el)))) as T;
+      return (await Promise.all(
+        data.map((el) => this.serialize(el, counterpart))
+      )) as T;
     } else if (typeof data === "object") {
       return Object.fromEntries(
         await Promise.all(
           Object.entries(data!).map(
             async ([key, value]: any[]): Promise<any[]> => [
               key,
-              await this.serialize(value),
+              await this.serialize(value, counterpart),
             ]
           )
         )
@@ -96,79 +155,106 @@ export default class RpcContext {
     }
   }
 
-  private async handleRequest({
-    request,
-    caller,
-    args,
-  }: {
-    request: string;
-    caller: number | string;
-    args: any[];
-  }) {
-    if (!(request in this.services)) {
-      this.send({
-        type: "rpc:response",
+  private async handleRequest(
+    {
+      request,
+      caller,
+      args,
+    }: {
+      request: string;
+      caller: string;
+      args: any[];
+    },
+    cp: Counterpart
+  ) {
+    if (!this.services.has(request)) {
+      cp.postMessage({
+        [RPC_TYPE_KEY]: "response",
         caller,
         error: `RPC handler not found: ${request}`,
       });
     } else {
-      const result = await this.services[request](
-        ...(this.deserialize(args) as any[])
+      const result = await this.services.get(request)!(
+        ...(this.deserialize(args, cp) as any[])
       );
-      this.send({
-        type: "rpc:response",
+      cp.postMessage({
+        [RPC_TYPE_KEY]: "response",
         caller,
-        value: await this.serialize(result),
+        value: await this.serialize(result, cp),
       });
     }
   }
+
   // ========================== RPC Client ==========================
-  private pendingReq: {
-    [key: string]: {
-      resolve: (value: any) => void;
-      reject: (error?: any) => void;
-    };
-  } = {};
+  private pendingReq: Map<string, DeferredPromise> = new Map();
   private reqCounter = 0;
+
+  private createRpcProxy(id: string, cp: Counterpart) {
+    const proxy: Function = async (...args: any[]) => {
+      const { promise, ...handler } = deferPromise();
+      const caller = (this.reqCounter++).toString(16);
+      this.pendingReq.set(caller, handler);
+      cp?.postMessage({
+        [RPC_TYPE_KEY]: "request",
+        request: id,
+        caller,
+        args: await this.serialize(args, cp),
+      });
+      return promise;
+    };
+    (proxy as RpcProxy)[rpcLabel] = {
+      origin: cp,
+      id,
+    };
+    return proxy;
+  }
+
+  deserialize<T>(value: T, counterpart?: Counterpart): T | Function {
+    const cp = this.getCounterpart(counterpart);
+    if (Array.isArray(value)) {
+      return value.map((val) => this.deserialize(val, cp)) as T;
+    } else if (typeof value === "object" && value !== null) {
+      return Object.fromEntries(
+        Object.entries(value).map(([key, val]) => [
+          key,
+          this.deserialize(val, cp),
+        ])
+      ) as T;
+    } else if (typeof value === "string") {
+      if (value.startsWith("rpc://")) {
+        const rpcId = value.slice(6);
+        if (!rpcId.startsWith("@")) {
+          return this.createRpcProxy(rpcId, cp);
+        } else {
+          const reflect = rpcId.slice(1);
+          if (this.services.has(reflect)) return this.services.get(reflect)!;
+          else throw new Error(`RPC: local reflection <${reflect}> not exist.`);
+        }
+      } else {
+        // String is a plain value
+        return unescape(value) as T;
+      }
+    } else {
+      return value;
+    }
+  }
 
   private async handleResponse({
     caller,
     error,
     value,
   }: {
-    caller: number | string;
+    caller: string;
     error?: any;
     value?: any;
   }) {
-    if (!(caller in this.pendingReq)) return;
-    const { resolve, reject } = this.pendingReq[caller];
-    error ? reject(error) : resolve(await this.serialize(value));
-    delete this.pendingReq[caller];
-  }
-
-  deserialize<T>(value: T): T | Function {
-    if (typeof value === "object" && value !== null) {
-      const self = this;
-      return new Proxy(value, {
-        get(target: any, prop) {
-          return self.deserialize(target[prop]);
-        },
-      });
-    } else if (typeof value === "string" && /^rpc\:\/\//i.test(value)) {
-      return async (...args: any[]) => {
-        const { promise, ...handler } = deferPromise();
-        const caller = (this.reqCounter++).toString(16);
-        this.pendingReq[caller] = handler;
-        this.send({
-          type: "rpc:request",
-          request: value, // rpc://xxx
-          caller,
-          args: await this.serialize(args),
-        });
-        return promise;
-      };
+    if (!this.pendingReq.has(caller)) return;
+    const { resolve, reject } = this.pendingReq.get(caller)!;
+    if (!error) {
+      resolve(value);
     } else {
-      return value;
+      reject(error);
     }
+    this.pendingReq.delete(caller);
   }
 }
