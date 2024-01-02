@@ -16,7 +16,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build:esm": "tsc -b tsconfig.esm.json && mv dist/index.js dist/index.mjs",
     "build:cjs": "tsc -b tsconfig.cjs.json && mv dist/index.js dist/index.cjs",
-    "build": "tsc; npm run build:esm; npm run build:cjs;"
+    "build": "tsc; npm run build:esm; npm run build:cjs;",
+    "publish": "rm -rf dist; npm run build; npm login; npm publish --access public"
   },
   "repository": {
     "type": "git",
