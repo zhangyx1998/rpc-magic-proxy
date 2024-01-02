@@ -251,7 +251,7 @@ export default class RpcContext {
     if (!this.pendingReq.has(caller)) return;
     const { resolve, reject } = this.pendingReq.get(caller)!;
     if (!error) {
-      resolve(value);
+      resolve(this.deserialize(value));
     } else {
       reject(error);
     }
