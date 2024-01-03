@@ -4,6 +4,10 @@ Push any un-serializable object through an Node RPC channel!
 
 ## Highlights
 
+1. Translates functions into magic strings which can be proxied back.
+2. Works with circular reference.
+3. Retains strict equality of objects and arrays.
+
 ## Usage
 
 ```js
@@ -40,6 +44,7 @@ if (isMainThread) {
 ```
 
 > #### Output:
+>
 > ```plaintext
 > main: got request ping()
 > client -> ping(): pong

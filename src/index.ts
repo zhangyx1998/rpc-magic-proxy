@@ -31,26 +31,22 @@ function deferPromise(): DeferredPromise & { promise: Promise<any> } {
   };
 }
 
+/**
+ * RPC Protocol Preamble Characters:
+ * 0. #: Escape character for normal string
+ * 1. $: RPC remote function
+ * 2. @: RPC local reflection
+ * 3. &: Object reference
+ * ---
+ * INTERNAL USE ONLY, SUBJECT TO CHANGE
+ */
+
 function escape(str: string) {
-  return str.replace(/^\#*rpc\:\/\//, (match) => "#" + match);
+  return "#" + str;
 }
 
 function unescape(str: string) {
-  return str.replace(/^\#+rpc\:\/\//, (match) => match.slice(1));
-}
-
-function getRpcId(str: string) {
-  if (str.startsWith("rpc://~")) {
-    return {
-      local: str.slice(7),
-    };
-  } else if (str.startsWith("rpc://")) {
-    return {
-      remote: str.slice(6),
-    };
-  } else {
-    return {};
-  }
+  return str.slice(1);
 }
 
 type Counterpart = Worker | MessagePort;
@@ -114,52 +110,73 @@ export default class RpcContext {
   private srvIdMap = new WeakMap<Function, string>();
   private services: Map<string, Function> = new Map();
   private serviceCounter = 0;
-  async serialize<T>(
-    _data: Function | T | PromiseLike<T>,
-    counterpart?: Counterpart
-  ): Promise<string | T> {
+
+  async #serialize<T>(
+    _data: Function | T,
+    context: Array<any>,
+    counterpart?: Counterpart,
+    refs: WeakMap<any, number> = new WeakMap()
+  ) {
     const data = await _data;
     if (typeof data === "string") {
       return escape(data);
     } else if (isRpcPrimitive(data)) {
-      return data as T;
+      return data;
     } else if (typeof data === "function") {
       // Check for remote reflection
       if (counterpart && rpcLabel in data) {
         const { origin, id } = (data as any)[rpcLabel]!;
         if (counterpart === origin) {
           // Use reflect
-          return "rpc://@" + id;
+          return "@" + id;
         }
-      }
-      // Check if function is already registered
-      if (this.srvIdMap.has(data)) {
-        return "rpc://" + this.srvIdMap.get(data)!;
+      } else if (this.srvIdMap.has(data)) {
+        // Check if function is already registered
+        return "$" + this.srvIdMap.get(data)!;
       } else {
         // Register RPC handler
         const rpcId = (this.serviceCounter++).toString(16);
         this.srvIdMap.set(data, rpcId);
         this.services.set(rpcId, data);
-        return "rpc://" + rpcId;
+        return "$" + rpcId;
       }
+    } else if (refs.has(data)) {
+      return `&${refs.get(data)}`;
     } else if (Array.isArray(data)) {
-      return (await Promise.all(
-        data.map((el) => this.serialize(el, counterpart))
-      )) as T;
+      const refId = context.length;
+      refs.set(data, refId);
+      const serialized: any[] = [];
+      context.push(serialized);
+      for (const el of data) {
+        serialized.push(await this.#serialize(el, context, counterpart, refs));
+      }
+      return `&${refId}`;
     } else if (typeof data === "object") {
-      return Object.fromEntries(
-        await Promise.all(
-          Object.entries(data!).map(
-            async ([key, value]: any[]): Promise<any[]> => [
-              key,
-              await this.serialize(value, counterpart),
-            ]
-          )
-        )
-      );
+      const refId = context.length;
+      const serialized: any = {};
+      refs.set(data, refId);
+      context.push(serialized);
+      for (const [key, value] of Object.entries(data as any)) {
+        serialized[key] = await this.#serialize(
+          value,
+          context,
+          counterpart,
+          refs
+        );
+      }
+      return `&${refId}`;
     } else {
-      throw new Error(`Unknown data type: ${typeof data}`);
+      throw new Error(`Unsupported data type: ${typeof data}`);
     }
+  }
+
+  async serialize<T>(
+    data: Function | T | PromiseLike<T>,
+    counterpart?: Counterpart
+  ) {
+    const context: Array<any> = [];
+    const val = await this.#serialize(data, context, counterpart);
+    return context.length ? context : val;
   }
 
   private async handleRequest(
@@ -181,14 +198,22 @@ export default class RpcContext {
         error: `RPC handler not found: ${request}`,
       });
     } else {
-      const result = await this.services.get(request)!(
-        ...(this.deserialize(args, cp) as any[])
-      );
-      cp.postMessage({
-        [RPC_TYPE_KEY]: "response",
-        caller,
-        value: await this.serialize(result, cp),
-      });
+      try {
+        const result = await this.services.get(request)!(
+          ...(this.deserialize(args, cp) as any[])
+        );
+        cp.postMessage({
+          [RPC_TYPE_KEY]: "response",
+          caller,
+          value: await this.serialize(result, cp),
+        });
+      } catch (error) {
+        cp.postMessage({
+          [RPC_TYPE_KEY]: "response",
+          caller,
+          error: await this.serialize(error, cp),
+        });
+      }
     }
   }
 
@@ -196,7 +221,8 @@ export default class RpcContext {
   private pendingReq: Map<string, DeferredPromise> = new Map();
   private reqCounter = 0;
 
-  private createRpcProxy(id: string, cp: Counterpart) {
+  private createRpcProxy(_id: string, cp: Counterpart) {
+    const id = _id;
     const proxy: Function = async (...args: any[]) => {
       const { promise, ...handler } = deferPromise();
       const caller = (this.reqCounter++).toString(16);
@@ -216,33 +242,47 @@ export default class RpcContext {
     return proxy;
   }
 
-  deserialize<T>(value: T, counterpart?: Counterpart): T | Function {
+  #deserialize<T>(
+    value: T,
+    context: Array<any>,
+    counterpart?: Counterpart
+  ): T | any {
     const cp = this.getCounterpart(counterpart);
-    if (Array.isArray(value)) {
-      return value.map((val) => this.deserialize(val, cp)) as T;
-    } else if (typeof value === "object" && value !== null) {
-      return Object.fromEntries(
-        Object.entries(value).map(([key, val]) => [
-          key,
-          this.deserialize(val, cp),
-        ])
-      ) as T;
+    if (typeof value === "object" && value !== null) {
+      for (const key in value) {
+        value[key] = this.#deserialize(value[key], context, cp);
+      }
+      return value;
     } else if (typeof value === "string") {
-      if (value.startsWith("rpc://")) {
-        const rpcId = value.slice(6);
-        if (!rpcId.startsWith("@")) {
-          return this.createRpcProxy(rpcId, cp);
-        } else {
-          const reflect = rpcId.slice(1);
-          if (this.services.has(reflect)) return this.services.get(reflect)!;
-          else throw new Error(`RPC: local reflection <${reflect}> not exist.`);
-        }
+      if (value.startsWith("$")) {
+        const rpcId = value.slice(1);
+        return this.createRpcProxy(rpcId, cp);
+      } else if (value.startsWith("@")) {
+        const reflectId = value.slice(1);
+        if (this.services.has(reflectId)) return this.services.get(reflectId)!;
+        else throw new Error(`RPC: local reflection @${reflectId} not exist.`);
+      } else if (value.startsWith("&")) {
+        const refId = parseInt(value.slice(1));
+        if (!(refId in context))
+          throw new Error(`RPC: object reference &${refId} not exist.`);
+        return context[refId];
       } else {
         // String is a plain value
-        return unescape(value) as T;
+        return unescape(value);
       }
     } else {
       return value;
+    }
+  }
+
+  deserialize<T>(value: T, counterpart?: Counterpart) {
+    if (Array.isArray(value)) {
+      const context = value as any[];
+      return context.map((val) =>
+        this.#deserialize(val, context, counterpart)
+      )[0];
+    } else {
+      return this.#deserialize(value, [], counterpart);
     }
   }
 
