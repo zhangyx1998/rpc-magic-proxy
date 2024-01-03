@@ -111,6 +111,7 @@ export default class RpcContext {
   }
 
   // ========================== RPC Server ==========================
+  private srvIdMap = new WeakMap<Function, string>();
   private services: Map<string, Function> = new Map();
   private serviceCounter = 0;
   async serialize<T>(
@@ -131,10 +132,16 @@ export default class RpcContext {
           return "rpc://@" + id;
         }
       }
-      // Register RPC handler
-      const rpcId = (this.serviceCounter++).toString(16);
-      this.services.set(rpcId, data);
-      return "rpc://" + rpcId;
+      // Check if function is already registered
+      if (this.srvIdMap.has(data)) {
+        return "rpc://" + this.srvIdMap.get(data)!;
+      } else {
+        // Register RPC handler
+        const rpcId = (this.serviceCounter++).toString(16);
+        this.srvIdMap.set(data, rpcId);
+        this.services.set(rpcId, data);
+        return "rpc://" + rpcId;
+      }
     } else if (Array.isArray(data)) {
       return (await Promise.all(
         data.map((el) => this.serialize(el, counterpart))
