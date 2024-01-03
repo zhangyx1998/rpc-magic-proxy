@@ -74,7 +74,7 @@ export default class RpcContext {
       if (type === "request") {
         self.handleRequest(payload, counterpart);
       } else if (type === "response") {
-        self.handleResponse(payload);
+        self.handleResponse(payload, counterpart);
       }
     };
     const closeHandler = () => self.reset();
@@ -286,19 +286,22 @@ export default class RpcContext {
     }
   }
 
-  private async handleResponse({
-    caller,
-    error,
-    value,
-  }: {
-    caller: string;
-    error?: any;
-    value?: any;
-  }) {
+  private async handleResponse(
+    {
+      caller,
+      error,
+      value,
+    }: {
+      caller: string;
+      error?: any;
+      value?: any;
+    },
+    counterpart: Counterpart
+  ) {
     if (!this.pendingReq.has(caller)) return;
     const { resolve, reject } = this.pendingReq.get(caller)!;
     if (!error) {
-      resolve(this.deserialize(value));
+      resolve(this.deserialize(value, counterpart));
     } else {
       reject(error);
     }
