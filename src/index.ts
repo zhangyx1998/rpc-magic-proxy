@@ -115,7 +115,7 @@ export default class RpcContext {
     _data: Function | T,
     context: Array<any>,
     counterpart?: Counterpart,
-    refs: WeakMap<any, number> = new WeakMap()
+    refs: WeakMap<Object, string> = new WeakMap()
   ) {
     const data = await _data;
     if (typeof data === "string") {
@@ -140,10 +140,10 @@ export default class RpcContext {
         this.services.set(rpcId, data);
         return "$" + rpcId;
       }
-    } else if (refs.has(data)) {
-      return `&${refs.get(data)}`;
+    } else if (refs.has(data as Object)) {
+      return `&${refs.get(data as Object)}`;
     } else if (Array.isArray(data)) {
-      const refId = context.length;
+      const refId = context.length.toString(16);
       refs.set(data, refId);
       const serialized: any[] = [];
       context.push(serialized);
@@ -152,9 +152,9 @@ export default class RpcContext {
       }
       return `&${refId}`;
     } else if (typeof data === "object") {
-      const refId = context.length;
+      const refId = context.length.toString(16);
       const serialized: any = {};
-      refs.set(data, refId);
+      refs.set(data as Object, refId);
       context.push(serialized);
       for (const [key, value] of Object.entries(data as any)) {
         serialized[key] = await this.#serialize(
@@ -262,7 +262,7 @@ export default class RpcContext {
         if (this.services.has(reflectId)) return this.services.get(reflectId)!;
         else throw new Error(`RPC: local reflection @${reflectId} not exist.`);
       } else if (value.startsWith("&")) {
-        const refId = parseInt(value.slice(1));
+        const refId = parseInt(value.slice(1), 16);
         if (!(refId in context))
           throw new Error(`RPC: object reference &${refId} not exist.`);
         return context[refId];
