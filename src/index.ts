@@ -130,7 +130,8 @@ export default class RpcContext {
           // Use reflect
           return "@" + id;
         }
-      } else if (this.srvIdMap.has(data)) {
+      }
+      if (this.srvIdMap.has(data)) {
         // Check if function is already registered
         return "$" + this.srvIdMap.get(data)!;
       } else {
