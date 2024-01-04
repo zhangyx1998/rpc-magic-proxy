@@ -7,6 +7,12 @@ Push any un-serializable object through an Node RPC channel!
 1. Translates functions into magic strings which can be proxied back.
 2. Works with circular reference.
 3. Retains strict equality of objects and arrays.
+4. Retains types of `Map` and `Set`
+
+> Planned:
+>
+> - [ ] Proxy back Map and Set (and Objects) as AsyncMap, AsyncSet etc.
+> - [ ] Convert Symbols, retaining strict equality on both sides
 
 ## Usage
 
@@ -51,3 +57,13 @@ if (isMainThread) {
 > main: got request hello()
 > client -> hello(): world
 > ```
+
+## More examples:
+
+- [hello world](examples/hello.mjs) (shown above)
+- [function reflection](examples/reflect.mjs)
+- [strict equal](examples/strict-equal.mjs)
+- [circular reference](examples/circular-ref.mjs)
+- [multi-jump function proxy](examples/multi-jump.mjs)
+- [push pull callback proxy](examples/push-pull.mjs)
+- [Map and Set reconstruction](examples/map-set.mjs)
