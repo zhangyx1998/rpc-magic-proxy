@@ -18,7 +18,7 @@ interface DeferredPromise {
   reject: (error?: any) => void;
 }
 
-function deferPromise(): DeferredPromise & { promise: Promise<any> } {
+export function deferPromise(): DeferredPromise & { promise: Promise<any> } {
   let resolve!: DeferredPromise["resolve"], reject!: DeferredPromise["reject"];
   const promise = new Promise((res, rej) => {
     resolve = res;
