@@ -3,19 +3,18 @@ import RpcContext from "rpc-magic-proxy";
 
 async function main() {
     const ctx = new RpcContext();
-    const obj = { hello: "world" }
-    const data = {
-        a: obj,
-        b: obj,
-    };
-    const workerData = await ctx.serialize(data)
+    const workerData = await ctx.serialize({
+        hello() {
+            console.log(this !== global, this)
+        }
+    })
     ctx.bind(new Worker(new URL(import.meta.url), { workerData }));
 }
 
 async function worker() {
-    const ctx = new RpcContext().bind(parentPort);
-    const { a, b } = ctx.deserialize(workerData);
-    console.log('strict equal:', a === b);
+    const ctx = new RpcContext({ preserveThis: true }).bind(parentPort);
+    const { hello } = ctx.deserialize(workerData);
+    await hello.apply({ foo: "bar" })
     ctx.reset();
 }
 

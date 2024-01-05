@@ -19,7 +19,7 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext(parentPort);
+  const ctx = new RpcContext().bind(parentPort);
   const data = ctx.deserialize(workerData);
   // Proxy a function call
   console.log("client -> ping():", await data.ping());

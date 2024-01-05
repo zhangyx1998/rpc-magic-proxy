@@ -13,6 +13,13 @@ function isRpcPrimitive(value: any) {
   );
 }
 
+function define(obj: any, prop: string | symbol, val: any) {
+  Object.defineProperty(obj, prop, {
+    get: () => val,
+    set: () => {},
+  });
+}
+
 interface DeferredPromise {
   resolve: (value?: any) => void;
   reject: (error?: any) => void;
@@ -39,9 +46,10 @@ export function deferPromise(): DeferredPromise & { promise: Promise<any> } {
  * 2. @: RPC local reflection
  * 3. &: Object reference
  * ---
- * Supported slash constructors:
- * @123/Map
- * @123/Set
+ * Magic Proxy Protocol:
+ * For example:
+ * $1:foo   [FunctionProxy, { name: "foo" }]
+ * @123/Map new Map(context[123])
  * ---
  * INTERNAL USE ONLY, SUBJECT TO CHANGE
  */
@@ -63,10 +71,31 @@ const rpcLabel = Symbol("RPC Proxied Function");
 
 type RpcProxy = Function & { [rpcLabel]: { origin: Counterpart; id: string } };
 
+interface RpcContextOptions {
+  /**
+   * If set to true, the `this` context of the remote function will be preserved
+   * @default false
+   */
+  preserveThis?: boolean;
+
+  /**
+   * By default, `globalThis` will be replaced with `undefined` to prevent
+   * unintentional access to remote global variables. Turn this on if you really
+   * need to access the globalThis on the remote side.
+   * Notice: this might incur heavy performance penalty.
+   * @default false
+   */
+  preserveGlobalThis?: boolean;
+}
+
 export default class RpcContext {
   private counterparts: Counterpart[] = [];
-  constructor(counterpart?: Counterpart) {
-    if (counterpart) this.bind(counterpart);
+  private options: RpcContextOptions = {
+    preserveThis: false,
+    preserveGlobalThis: false,
+  };
+  constructor(options?: RpcContextOptions) {
+    Object.assign(this.options, options);
   }
   // ====================== Context Management ======================
   private listeners: Function[] = [];
@@ -197,10 +226,12 @@ export default class RpcContext {
     {
       request,
       caller,
+      this: thisArg,
       args,
     }: {
       request: string;
       caller: string;
+      this?: any;
       args: any[];
     },
     cp: Counterpart
@@ -213,9 +244,10 @@ export default class RpcContext {
       });
     } else {
       try {
-        const result = await this.services.get(request)!(
-          ...(this.deserialize(args, cp) as any[])
-        );
+        const service = this.services.get(request)!;
+        const _this = await this.deserialize(thisArg, cp);
+        const argv = await this.deserialize(args, cp);
+        const result = await service.apply(_this, argv);
         cp.postMessage({
           [RPC_TYPE_KEY]: "response",
           caller,
@@ -235,29 +267,45 @@ export default class RpcContext {
   private pendingReq: Map<string, DeferredPromise> = new Map();
   private reqCounter = 0;
 
+  private normalizeProxyThisArg(thisArg: any) {
+    if (thisArg === this) return undefined;
+    if (!this.options.preserveThis) return undefined;
+    if (!this.options.preserveGlobalThis && thisArg === global)
+      return undefined;
+    return thisArg;
+  }
+
+  private async initiateRequest(
+    id: string,
+    cp: Counterpart,
+    thisArg: any,
+    args: any[]
+  ) {
+    const { promise, ...handler } = deferPromise();
+    const caller = (this.reqCounter++).toString(16);
+    this.pendingReq.set(caller, handler);
+    const _this = this.normalizeProxyThisArg(thisArg);
+    cp?.postMessage({
+      [RPC_TYPE_KEY]: "request",
+      request: id,
+      caller,
+      this: await this.serialize(_this, cp),
+      args: await this.serialize(args, cp),
+    });
+    return promise;
+  }
+
   private createRpcProxy(
-    _id: string,
+    id: string,
     cp: Counterpart,
     name: string = "RPC Anonymous Proxy"
   ) {
-    const id = _id;
-    const proxy: Function = async (...args: any[]) => {
-      const { promise, ...handler } = deferPromise();
-      const caller = (this.reqCounter++).toString(16);
-      this.pendingReq.set(caller, handler);
-      cp?.postMessage({
-        [RPC_TYPE_KEY]: "request",
-        request: id,
-        caller,
-        args: await this.serialize(args, cp),
-      });
-      return promise;
-    };
-    Object.defineProperty(proxy, "name", { value: name });
-    (proxy as RpcProxy)[rpcLabel] = {
-      origin: cp,
-      id,
-    };
+    const initiateRequest = this.initiateRequest.bind(this);
+    async function proxy(this: any, ...args: any[]) {
+      return initiateRequest(id, cp, this, args);
+    }
+    define(proxy, "name", name);
+    define(proxy, rpcLabel, { origin: cp, id });
     return proxy;
   }
 

@@ -1,5 +1,5 @@
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import RpcContext, { deferPromise } from "rpc-magic-proxy";
+import RpcContext from "rpc-magic-proxy";
 
 async function main() {
     const ctx = new RpcContext();
@@ -16,8 +16,7 @@ async function main() {
 }
 
 async function worker() {
-    const ctx = new RpcContext(parentPort);
-    console.log("workerData:", workerData);
+    const ctx = new RpcContext().bind(parentPort);
     const { map, set } = ctx.deserialize(workerData);
     console.log("Map:", map instanceof Map, Object.fromEntries([...map]));
     console.log("Set:", set instanceof Set, ...set);

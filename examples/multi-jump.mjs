@@ -15,8 +15,7 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext(parentPort);
-  console.log("workerData:", workerData)
+  const ctx = new RpcContext().bind(parentPort);
   const { callback, resolve } = ctx.deserialize(workerData);
   // First worker
   if (resolve) {
