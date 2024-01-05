@@ -64,11 +64,11 @@ isMainThread ? main() : worker();
 
 ## More examples:
 
-- [hello world](examples/hello.mjs) (shown above)
-- [function reflection](examples/reflect.mjs)
-- [strict equal](examples/strict-equal.mjs)
-- [circular reference](examples/circular-ref.mjs)
-- [multi-jump function proxy](examples/multi-jump.mjs)
-- [push pull callback proxy](examples/push-pull.mjs)
-- [Map and Set reconstruction](examples/map-set.mjs)
-- [Preserve Function thisArg](examples/this-arg.mjs)
+- [hello world](examples/01.hello.js) (shown above)
+- [function reflection](examples/02.reflect.js)
+- [strict equal](examples/03.strict-equal.js)
+- [circular reference](examples/04.circular-ref.js)
+- [multi-jump function proxy](examples/05.multi-jump.js)
+- [push pull callback proxy](examples/06.push-pull.js)
+- [Map and Set reconstruction](examples/07.map-set.js)
+- [Preserve Function thisArg](examples/08.this-arg.js)
