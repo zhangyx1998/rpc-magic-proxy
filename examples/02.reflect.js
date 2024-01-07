@@ -15,25 +15,25 @@ import RpcContext from "rpc-magic-proxy";
  */
 
 async function main() {
-    const ctx = new RpcContext();
-    const data = {
-        async foo(callback) {
-            console.log("foo:", callback === data.bar) // true
-            return await callback("foo");
-        },
-        bar(name) {
-            return `bar: ${name} is my friend`
-        },
-    };
-    const workerData = await ctx.serialize(data)
-    ctx.bind(new Worker(new URL(import.meta.url), { workerData }));
+  const ctx = new RpcContext();
+  const data = {
+    async foo(callback) {
+      console.log("foo:", callback === data.bar); // true
+      return await callback("foo");
+    },
+    bar(name) {
+      return `bar: ${name} is my friend`;
+    },
+  };
+  const workerData = await ctx.serialize(data);
+  ctx.bind(new Worker(new URL(import.meta.url), { workerData }));
 }
 
 async function worker() {
-    const ctx = new RpcContext().bind(parentPort);
-    const data = ctx.deserialize(workerData);
-    console.log(await data.foo(data.bar));
-    ctx.reset();
+  const ctx = new RpcContext().bind(parentPort);
+  const data = ctx.deserialize(workerData);
+  console.log(await data.foo(data.bar));
+  ctx.reset();
 }
 
-isMainThread ? main() : worker()
+isMainThread ? main() : worker();

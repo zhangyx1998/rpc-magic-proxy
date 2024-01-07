@@ -14,19 +14,20 @@ async function main() {
     },
   };
   // This will serialize data and send it to worker
-  const workerData = await ctx.serialize(data)
+  const workerData = await ctx.serialize(data);
   ctx.bind(new Worker(new URL(import.meta.url), { workerData }));
 }
 
 async function worker() {
   const ctx = new RpcContext().bind(parentPort);
   const data = ctx.deserialize(workerData);
+  console.log(Object.entries(data));
   // Proxy a function call
-  console.log("client -> ping():", await data.ping());
+  console.log("client -> ping():", await data.ping()); // pong
   // Proxy a function call with callback as argument
-  await data.hello((msg) => console.log("client -> hello():", msg));
+  await data.hello((msg) => console.log("client -> hello():", msg)); // world
   // This will unbind listeners and allow worker to exit
   ctx.reset();
 }
 
-isMainThread ? main() : worker()
+isMainThread ? main() : worker();
