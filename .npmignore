@@ -1,6 +1,9 @@
+.github
+.vscode
 src
 examples
-tsconfig.json
-tsconfig.*.json
-.github
+
 README.md
+dist/*.map
+tsconfig.json
+rollup.config.ts

@@ -8,13 +8,16 @@ Push any un-serializable object through an Node RPC channel!
 2. Proxied function has access to remote thisArg (caller assigned).
 3. Proxied function arguments and return values are automatically proxied.
 4. Works with circular reference.
-5. Retains strict equality of objects and arrays.
+5. Retains **strict equality** of objects and arrays inside a "message".
 6. Retains types of `Map` and `Set`, also retaining strict equality.
 
 > Planned:
 >
+> - [ ] Carry side effects on arguments back to caller
+> - [ ] Serializing 'pure' functions
 > - [ ] Proxy back Map and Set (and Objects) as AsyncMap, AsyncSet etc.
-> - [ ] Convert Symbols, retaining strict equality on both sides
+> - [ ] Convert Symbols, retaining strict equality on both sides (half done)
+> - [ ] Keep track of object lifecycle across processes
 
 ## Usage
 

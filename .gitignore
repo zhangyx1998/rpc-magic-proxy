@@ -129,5 +129,8 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-# examples directory does not need package-lock.json
-examples/**/package-lock.json
+# examples and tests does not need package-lock
+*/**/package-lock.json
+
+# VSCode
+.vscode
