@@ -277,7 +277,12 @@ export default class RPCContext {
           throw new ReferenceError(`RPC local reflection not found: ${id}`);
         return this.services.get(id)!;
       case "=":
-        return define(new Function(`return (${id})`)(), symSimpleFn, true);
+        const fn = (f: string) => new Function(`return (${f})`)();
+        try {
+          return define(fn(id), symSimpleFn, true);
+        } catch (_) {
+          return define(fn("function " + id), symSimpleFn, true);
+        }
       default:
         throw new TypeError(`Unknown fn magic "${magic}"`);
     }
