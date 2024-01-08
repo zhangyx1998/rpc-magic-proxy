@@ -23,10 +23,10 @@ Push any un-serializable object through an Node RPC channel!
 
 ```js
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import RpcContext from "rpc-magic-proxy";
+import RPCContext from "rpc-magic-proxy";
 
 async function main() {
-  const ctx = new RpcContext();
+  const ctx = new RPCContext();
   const data = {
     ping() {
       console.log("main: got request ping()");
@@ -43,12 +43,12 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext().bind(parentPort);
-  const data = ctx.deserialize(workerData);
+  const ctx = new RPCContext().bind(parentPort);
+  const { ping, hello } = ctx.deserialize(workerData);
   // Proxy a function call
-  console.log("client -> ping():", await data.ping());
+  console.log("client -> ping():", await ping());
   // Proxy a function call with callback as argument
-  await data.hello((msg) => console.log("client -> hello():", msg));
+  await hello((msg) => console.log("client -> hello():", msg));
   // This will unbind listeners and allow worker to exit
   ctx.reset();
 }
