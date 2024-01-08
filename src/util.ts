@@ -51,26 +51,8 @@ export function define<T extends Object>(
   return obj;
 }
 
-export function clearObject<T extends Map<any, any> | Set<any> | Object>(
-  obj: T,
-) {
-  if (obj instanceof Map || obj instanceof Set) obj.clear();
-  else if (typeof obj === "object" && obj !== null)
-    Object.keys(obj).forEach((key) => delete (obj as any)[key]);
-  else throw new TypeError(`Cannot clear object of type ${typeof obj}`);
-  return obj;
-}
-
-export function loadObject<T extends Map<any, any> | Set<any> | Object>(
-  obj: T,
-  items: any[],
-) {
-  if (obj instanceof Map) for (const [k, v] of items) obj.set(k, v);
-  else if (obj instanceof Set) for (const el of items) obj.add(el);
-  else if (typeof obj === "object" && obj !== null)
-    Object.assign(obj, ...items);
-  else throw new TypeError(`Cannot load object of type ${typeof obj}`);
-  return obj;
+export function bigint2str(_: any, value: bigint | any) {
+  return typeof value === "bigint" ? "n" + value.toString() : value;
 }
 
 async function* $traverse(

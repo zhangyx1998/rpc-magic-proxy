@@ -8,7 +8,7 @@ import type { Magic, PendingRequest } from "./types";
 import MemoryView, { symMemView } from "./mem-view";
 import inflate from "./inflate";
 import deflate from "./deflate";
-import { deferPromise, define, isPrimitive } from "./util";
+import { bigint2str, deferPromise, define, isPrimitive } from "./util";
 interface Counterpart {
   postMessage: MessagePort["postMessage"];
   on: (event: "message" | "close", handler: Function) => void;
@@ -175,6 +175,12 @@ export default class RPCContext {
         const _argv = this.deserialize(argv, cp);
         const $argv = $(_argv);
         const fn = (f: MarkupFn) => this.deflateFn(f, cp);
+        async function diff(src?: any[], mx?: MemoryView) {
+          if (!src || !mx) return undefined;
+          const dst = await deflate(mx, fn);
+          const str = (v: any) => JSON.stringify(v, bigint2str);
+          return dst.map((v, i) => (str(v) === str(src[i]) ? undefined : v));
+        }
         try {
           const callee = this.services.get(request)!;
           const result = await callee.apply(_this, _argv);
@@ -182,16 +188,16 @@ export default class RPCContext {
             [RPC_TYPE_KEY]: "response",
             caller,
             value: await this.serialize(result, cp).catch(console.error),
-            argv: $argv && (await deflate($argv, fn).catch(console.error)),
-            this: $this && (await deflate($this, fn).catch(console.error)),
+            argv: await diff(argv, $argv!).catch(console.error),
+            this: await diff(thisArg, $this!).catch(console.error),
           });
         } catch (error) {
           cp.postMessage({
             [RPC_TYPE_KEY]: "response",
             caller,
             error: await this.serialize(error, cp).catch(console.error),
-            argv: $argv && (await deflate($argv, fn).catch(console.error)),
-            this: $this && (await deflate($this, fn).catch(console.error)),
+            argv: await diff(argv, $argv!).catch(console.error),
+            this: await diff(thisArg, $this!).catch(console.error),
           });
         }
       } catch (error) {
