@@ -10,3 +10,4 @@ export default RPCContext;
 export { RPCContext };
 export { default as MemoryView } from "./mem-view";
 export { deferPromise } from "./util";
+export { traverse } from "./util";
