@@ -1,8 +1,8 @@
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import RpcContext, { deferPromise } from "rpc-magic-proxy";
+import RPCContext, { deferPromise } from "rpc-magic-proxy";
 
 async function main() {
-  const ctx = new RpcContext();
+  const ctx = new RPCContext();
   const { promise, resolve } = deferPromise();
   // First worker
   ctx.bind(
@@ -19,7 +19,7 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext().bind(parentPort);
+  const ctx = new RPCContext().bind(parentPort);
   const { push, pull } = ctx.deserialize(workerData);
   // First worker
   if (push) {

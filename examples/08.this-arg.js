@@ -1,8 +1,8 @@
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import RpcContext from "rpc-magic-proxy";
+import RPCContext from "rpc-magic-proxy";
 
 async function main() {
-  const ctx = new RpcContext();
+  const ctx = new RPCContext();
   const workerData = await ctx.serialize({
     hello() {
       console.log(this !== global, this);
@@ -12,7 +12,7 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext({ preserveThis: true }).bind(parentPort);
+  const ctx = new RPCContext({ carryThis: true }).bind(parentPort);
   const { hello } = ctx.deserialize(workerData);
   await hello.apply({ foo: "bar" });
   ctx.reset();

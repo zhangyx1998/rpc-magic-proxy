@@ -1,8 +1,8 @@
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import RpcContext from "rpc-magic-proxy";
+import RPCContext from "rpc-magic-proxy";
 
 async function main() {
-  const ctx = new RpcContext();
+  const ctx = new RPCContext();
   const data = {
     ping() {
       console.log("main: got request ping()");
@@ -19,7 +19,7 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext().bind(parentPort);
+  const ctx = new RPCContext().bind(parentPort);
   const data = ctx.deserialize(workerData);
   console.log(Object.entries(data));
   // Proxy a function call

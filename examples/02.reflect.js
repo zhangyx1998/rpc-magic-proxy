@@ -1,5 +1,5 @@
 import { Worker, isMainThread, parentPort, workerData } from "worker_threads";
-import RpcContext from "rpc-magic-proxy";
+import RPCContext from "rpc-magic-proxy";
 
 /**
  * In this example, functions 'foo()' and 'bar()' are both proxied. The worker
@@ -15,7 +15,7 @@ import RpcContext from "rpc-magic-proxy";
  */
 
 async function main() {
-  const ctx = new RpcContext();
+  const ctx = new RPCContext();
   const data = {
     async foo(callback) {
       console.log("foo:", callback === data.bar); // true
@@ -30,7 +30,7 @@ async function main() {
 }
 
 async function worker() {
-  const ctx = new RpcContext().bind(parentPort);
+  const ctx = new RPCContext().bind(parentPort);
   const data = ctx.deserialize(workerData);
   console.log(await data.foo(data.bar));
   ctx.reset();
