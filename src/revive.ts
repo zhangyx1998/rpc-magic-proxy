@@ -15,6 +15,12 @@ function ref(el: Primitive, view: any[]) {
   return el;
 }
 
+function set<T extends Object>(obj: T, key: keyof T, value: any) {
+  try {
+    obj[key] = value;
+  } catch (_) {}
+}
+
 export default {
   // Will be shared with Function, Object and Array
   Generic: (subject: Function | Record<string | symbol, any> = {}) => ({
@@ -23,7 +29,7 @@ export default {
       const keys = new Set(Object.keys(subject));
       for (const [key, slug] of data) {
         keys.delete(key);
-        (subject as any)[key] = ref(slug, view);
+        set(subject as Record<string | symbol, any>, key, ref(slug, view));
       }
       for (const key of keys) delete (subject as any)[key];
     },
@@ -40,7 +46,7 @@ export default {
       const keys = new Set(Object.keys(subject));
       for (const [i, slug] of data.entries()) {
         keys.delete(i.toString());
-        (subject as any[])[i] = ref(slug, view);
+        set(subject, i, ref(slug, view));
       }
       for (const key of keys) delete (subject as any)[key];
     },
