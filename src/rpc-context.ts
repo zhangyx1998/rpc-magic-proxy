@@ -29,7 +29,7 @@ const symProxyFn = Symbol("RPC Magic Proxy");
 // This symbol is used to mark a function as a simple RPC function
 const symSimpleFn = Symbol("RPC Simple Function");
 
-interface RPCContextOptions {
+export interface RPCContextOptions {
   /**
    * If set to true, the `this` context of the remote function will be carried
    * @default true

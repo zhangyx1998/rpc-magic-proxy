@@ -5,9 +5,9 @@
  * ------------------------------------------------------ */
 
 "use strict";
-import RPCContext from "./rpc-context";
+import RPCContext, { type RPCContextOptions } from "./rpc-context";
 export default RPCContext;
-export { RPCContext };
+export { RPCContext, RPCContextOptions };
 export { default as MemoryView } from "./mem-view";
 export { deferPromise } from "./util";
 export { traverse } from "./util";
