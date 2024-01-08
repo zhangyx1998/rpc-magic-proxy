@@ -1,9 +1,11 @@
 .github
 .vscode
+
 src
 examples
+tests
+dist/*.map
 
 README.md
-dist/*.map
 tsconfig.json
 rollup.config.ts
