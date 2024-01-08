@@ -4,6 +4,7 @@
  * You may find the full license in project root directory.
  * ------------------------------------------------------ */
 
+"use strict";
 import RPCContext from "./rpc-context";
 export default RPCContext;
 export { RPCContext };
